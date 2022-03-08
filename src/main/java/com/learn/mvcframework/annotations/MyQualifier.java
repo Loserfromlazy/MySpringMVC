@@ -3,13 +3,13 @@ package com.learn.mvcframework.annotations;
 import java.lang.annotation.*;
 
 /**
- * 自定义RequestMapping
+ * 自定义Qualifier
  *
  * @author Yuhaoran
  */
 @Documented
-@Target({ElementType.TYPE,ElementType.METHOD})
+@Target(ElementType.FIELD)
 @Retention(RetentionPolicy.RUNTIME)
-public @interface MyRequestMapping {
+public @interface MyQualifier {
     String value() default "";
 }
