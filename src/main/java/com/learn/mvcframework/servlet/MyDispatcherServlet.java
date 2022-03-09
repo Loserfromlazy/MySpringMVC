@@ -2,6 +2,7 @@ package com.learn.mvcframework.servlet;
 
 import com.learn.mvcframework.annotations.*;
 import com.learn.mvcframework.pojo.Handler;
+import org.apache.commons.lang3.StringUtils;
 
 import javax.servlet.ServletConfig;
 import javax.servlet.ServletException;
@@ -12,8 +13,12 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -241,16 +246,40 @@ public class MyDispatcherServlet extends HttpServlet {
 
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        //根据url找到对应的方法
         Handler handler = getHandler(req);
         if (handler==null){
             resp.getWriter().write("404 NOT FOUND");
             return;
         }
-        // todo 参数绑定
         Class<?>[] parameterTypes = handler.getMethod().getParameterTypes();
+        Object[] paramsValue = new Object[parameterTypes.length];
+        Map<String, String[]> parameterMap = req.getParameterMap();
+        for (Map.Entry<String, String[]> entry : parameterMap.entrySet()) {
+            // 此处是因为前端传递过来的参数是数组，如?name=1&name=2 所以需要进行处理
+            String join = StringUtils.join(entry.getValue(), ",");
+            if (!handler.getParamIndexMapping().containsKey(entry.getKey())){
+                continue;
+            }
+            Integer index = handler.getParamIndexMapping().get(entry.getKey());
+            Class<?> parameterType = parameterTypes[index];
+            Object o = null;
+            try {
+                o = transformValue(parameterType,join);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            paramsValue[index] = o;
+        }
 
-        //handler.getMethod().invoke(handler.getController(),)
+        Integer requetsIndex = handler.getParamIndexMapping().get(HttpServletRequest.class.getSimpleName());
+        Integer responseIndex = handler.getParamIndexMapping().get(HttpServletResponse.class.getSimpleName());
+        paramsValue[requetsIndex] = req;
+        paramsValue[responseIndex] = resp;
+        try {
+            handler.getMethod().invoke(handler.getController(),paramsValue);
+        } catch (IllegalAccessException | InvocationTargetException e) {
+            e.printStackTrace();
+        }
 
     }
 
@@ -270,5 +299,57 @@ public class MyDispatcherServlet extends HttpServlet {
             return handler;
         }
         return null;
+    }
+
+    /**
+     * 将value转换为对应的class类型 fieldType
+     *
+     * @param fieldType class类型
+     * @param value     需要转换的值
+     * @return Object
+     * @throws Exception 反射获取类 Class.forName 可能会导致异常
+     */
+    private Object transformValue(Class fieldType, String value) throws Exception {
+        if (StringUtils.isEmpty(value)) {
+            return null;
+        }
+        if (fieldType == String.class) {
+            return String.valueOf(value);
+        } else if (fieldType == Boolean.class || fieldType == boolean.class) {
+            return Boolean.valueOf(value);
+        } else if (fieldType == Byte.class || fieldType == byte.class) {
+            return Byte.valueOf(value);
+        } else if (fieldType == Double.class || fieldType == double.class) {
+            return Double.valueOf(value);
+        } else if (fieldType == Float.class || fieldType == float.class) {
+            return Float.valueOf(value);
+        } else if (fieldType == Integer.class || fieldType == int.class) {
+            return Integer.valueOf(value);
+        } else if (fieldType == Long.class || fieldType == long.class) {
+            return Long.valueOf(value);
+        } else if (fieldType == Short.class || fieldType == short.class) {
+            return Short.valueOf(value);
+        } else if (fieldType == Character.class || fieldType == char.class) {
+            return value.charAt(0);
+        } else if (fieldType == BigDecimal.class) {
+            return new BigDecimal(value);
+        } else if (fieldType == BigInteger.class) {
+            return new BigInteger(value);
+        } else if (fieldType == Date.class) {
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+            return sdf.parse(value);
+        } else if (fieldType == List.class) {
+            return Arrays.asList(value.split(","));
+        } else if (fieldType == Set.class) {
+            return new HashSet<>(Arrays.asList(value.split(",")));
+        } else if (fieldType.isEnum()) { // 枚举类型
+            Class<?> cl = Class.forName(fieldType.getName());
+            Field field = cl.getDeclaredField(value);
+            return field.get(cl);
+        } else if (fieldType == Pattern.class) {
+            return Pattern.compile(value);
+        } else {
+            return value;
+        }
     }
 }

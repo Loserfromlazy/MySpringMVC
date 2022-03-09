@@ -26,6 +26,7 @@ public class DemoController {
     @MyRequestMapping("/getName")
     public void getName(HttpServletRequest request, HttpServletResponse response,Integer id){
         String name = demoService.getName(id);
+        System.out.println(name);
     }
 
 
